@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RecycLoop - Live Environmental API Data (Prac 12)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f9f4;
+            color: #1b4332;
+            padding: 30px;
+            margin: 0;
+        }
+        .container {
+            max-width: 820px;
+            margin: auto;
+            background: #ffffff;
+            padding: 28px;
+            border-radius: 12px;
+            border: 2px solid #52b788;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            min-width: 150px;
+            padding: 10px;
+            border: 1px solid #95d5b2;
+            border-radius: 6px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #2d6a4f;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1b4332;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .metric-card {
+            background-color: #e8f5e9;
+            border-left: 5px solid #2d6a4f;
+            padding: 16px;
+            border-radius: 8px;
+        }
+        .metric-card h3 {
+            margin: 0 0 6px 0;
+            font-size: 1rem;
+            color: #081c15;
+        }
+        .metric-val {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #1b4332;
+        }
+        .action-note {
+            margin-top: 18px;
+            background-color: #d8f3dc;
+            padding: 14px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        #debugConsole {
+            background-color: #081c15;
+            color: #95d5b2;
+            padding: 14px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>♻ RecycLoop Regional Air & Carbon Monitor (Live API)</h2>
+        <p>Fetch real-time particulate and carbon monoxide levels from the Open-Meteo REST endpoint to prioritize regional plastic and e-waste recovery drives.</p>
+
+        <div class="controls">
+            <input type="text" id="zoneName" placeholder="Hub Zone Name" value="Coimbatore Hub">
+            <input type="text" id="latInput" placeholder="Latitude (-90 to 90)" value="11.0168">
+            <input type="text" id="lonInput" placeholder="Longitude (-180 to 180)" value="76.9558">
+            <button onclick="fetchEnvironmentalData()">Fetch Live Endpoint</button>
+        </div>
+
+        <div id="apiOutput"></div>
+        <div id="debugConsole">Debug Log: Ready to call Open-Meteo REST API...</div>
+    </div>
+
+    <script>
+        function logDebug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[RecycLoop API ${timestamp}]:`, message);
+            document.getElementById('debugConsole').innerText = `Debug Log [${timestamp}]: ${message}`;
+        }
+
+        // 1. Input Validation + Live REST API Call (fetch)
+        async function fetchEnvironmentalData() {
+            const zone = document.getElementById('zoneName').value.trim();
+            const latStr = document.getElementById('latInput').value.trim();
+            const lonStr = document.getElementById('lonInput').value.trim();
+
+            const lat = parseFloat(latStr);
+            const lon = parseFloat(lonStr);
+
+            // Input Validation
+            if (zone === "") {
+                logDebug("Validation Failed — Hub Zone Name cannot be empty.");
+                alert("Please enter a Hub Zone Name.");
+                return;
+            }
+            if (latStr === "" || isNaN(lat) || lat < -90 || lat > 90) {
+                logDebug("Validation Failed — Invalid Latitude value.");
+                alert("Please enter a valid numeric Latitude between -90 and 90.");
+                return;
+            }
+            if (lonStr === "" || isNaN(lon) || lon < -180 || lon > 180) {
+                logDebug("Validation Failed — Invalid Longitude value.");
+                alert("Please enter a valid numeric Longitude between -180 and 180.");
+                return;
+            }
+
+            const endpointUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5,carbon_monoxide`;
+            logDebug(`Requesting GET ${endpointUrl}`);
+
+            try {
+                const response = await fetch(endpointUrl);
+                if (!response.ok) {
+                    throw new Error(`Endpoint returned HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                logDebug(`200 OK — Received live telemetry for ${zone} (${data.latitude}, ${data.longitude}).`);
+                processAndDisplayTelemetry(zone, data);
+            } catch (error) {
+                logDebug(`API Error — ${error.message}`);
+                document.getElementById('apiOutput').innerHTML = `<p style="color:#c92a2a; font-weight:bold;">Failed to reach endpoint: ${error.message}</p>`;
+            }
+        }
+
+        // 2. JS Function to Process & Display Endpoint JSON Data
+        function processAndDisplayTelemetry(zone, data) {
+            const current = data.current;
+            const units = data.current_units;
+
+            const pm25 = current.pm2_5;
+            const pm10 = current.pm10;
+            const co = current.carbon_monoxide;
+
+            const priorityAlert = pm25 > 35
+                ? "High Particulate Alert: Deploying extra RecycLoop mobile collection units to prevent open waste burning."
+                : "Moderate/Good Air Index: Standard weekly circular pickup schedule active.";
+
+            document.getElementById('apiOutput').innerHTML = `
+                <h3>Live Telemetry for ${zone} (Updated: ${current.time})</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>PM2.5 Fine Particulates</h3>
+                        <div class="metric-val">${pm25} ${units.pm2_5}</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>PM10 Coarse Dust</h3>
+                        <div class="metric-val">${pm10} ${units.pm10}</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Carbon Monoxide (CO)</h3>
+                        <div class="metric-val">${co} ${units.carbon_monoxide}</div>
+                    </div>
+                </div>
+                <div class="action-note">♻ RecycLoop Dispatch Status: ${priorityAlert}</div>
+            `;
+        }
+    </script>
+
+</body>
+</html>
